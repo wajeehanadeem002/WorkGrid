@@ -1,6 +1,6 @@
 begin;
 
-select plan(52);
+select plan(53);
 
 select hasnt_function(
   'public',
@@ -252,11 +252,13 @@ select results_eq(
   array['true'],
   'authorized deletion first marks metadata as deleting'
 );
+select set_config('storage.operation', 'storage.object.delete_many', true);
 select results_eq(
   $$delete from storage.objects where name like '%/verified.pdf' returning name$$,
   array['50000000-0000-4000-8000-000000000005/55000000-0000-4000-8000-000000000005/55500000-0000-4000-8000-000000000005/55550000-0000-4000-8000-000000000005/verified.pdf'],
   'private Storage deletion is allowed only after the deleting transition'
 );
+select set_config('storage.operation', '', true);
 select results_eq(
   $$select public.reconcile_attachment_deletion('55550000-0000-4000-8000-000000000005') ->> 'outcome'$$,
   array['DELETED'],
@@ -284,10 +286,17 @@ select results_eq(
   'failed-upload cleanup seals the object into a non-readable discarding state'
 );
 select results_eq(
+  $$select count(*)::bigint from storage.objects where name like '%/cancel.pdf'$$,
+  array[0::bigint],
+  'discarding bytes remain hidden from normal reads and listings'
+);
+select set_config('storage.operation', 'storage.object.delete_many', true);
+select results_eq(
   $$delete from storage.objects where name like '%/cancel.pdf' returning name$$,
   array['50000000-0000-4000-8000-000000000005/55000000-0000-4000-8000-000000000005/55500000-0000-4000-8000-000000000005/55550000-0000-4000-8000-000000000015/cancel.pdf'],
-  'discarding bytes can be removed but cannot be downloaded'
+  'discarding bytes can be removed through the exact Storage delete operation'
 );
+select set_config('storage.operation', '', true);
 select results_eq(
   $$select public.cancel_attachment_reservation('55550000-0000-4000-8000-000000000015', current_setting('workgrid.test.cancel_two')) ->> 'outcome'$$,
   array['DELETED'],
@@ -355,11 +364,13 @@ select results_eq(
   array['discarding'],
   'interrupted upload bytes stay explicitly untrusted'
 );
+select set_config('storage.operation', 'storage.object.delete_many', true);
 select results_eq(
   $$delete from storage.objects where name like '%/stale-cleanup.pdf' returning id$$,
   array['89898989-8989-4989-8989-898989898989'::uuid],
   'a trusted cleanup worker can remove the sealed orphan object'
 );
+select set_config('storage.operation', '', true);
 update public.attachments
 set deletion_started_at = now() - interval '20 minutes'
 where id = '55550000-0000-4000-8000-000000000035';

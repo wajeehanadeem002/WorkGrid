@@ -29,11 +29,11 @@ select col_not_null('public', 'attachments', 'content_sha256', 'ready attachment
 select has_column('public', 'attachments', 'storage_object_id', 'verified attachments bind to the exact immutable Storage object');
 select has_column('public', 'attachments', 'deletion_started_at', 'attachment deletion has a recoverable intermediate state');
 
-select col_not_null('public', 'projects', 'organization_id');
-select col_not_null('public', 'tasks', 'organization_id');
-select col_not_null('public', 'comments', 'organization_id');
-select col_not_null('public', 'attachments', 'organization_id');
-select col_not_null('public', 'audit_logs', 'organization_id');
+select col_not_null('public', 'projects', 'organization_id', 'projects require a tenant boundary');
+select col_not_null('public', 'tasks', 'organization_id', 'tasks require a tenant boundary');
+select col_not_null('public', 'comments', 'organization_id', 'comments require a tenant boundary');
+select col_not_null('public', 'attachments', 'organization_id', 'attachments require a tenant boundary');
+select col_not_null('public', 'audit_logs', 'organization_id', 'audit logs require a tenant boundary');
 
 select ok((select relrowsecurity from pg_class where oid = 'public.organizations'::regclass), 'organizations enables RLS');
 select ok((select relrowsecurity from pg_class where oid = 'public.tasks'::regclass), 'tasks enables RLS');
