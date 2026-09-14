@@ -1,0 +1,8 @@
+export type SearchParams = Record<string, string | string[] | undefined>;
+
+export function firstParam(
+  value: string | string[] | undefined,
+  fallback = "",
+): string {
+  return (Array.isArray(value) ? value[0] : value) ?? fallback;
+}

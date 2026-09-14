@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Tests and reports
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# Supabase local state
+supabase/.branches/
+supabase/.temp/
+
+# Environment and secrets
+.env*
+!.env.example
+*.pem
+
+# Editors and operating systems
+.idea/
+.vscode/
+.vercel/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
