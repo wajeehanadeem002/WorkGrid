@@ -48,15 +48,15 @@ select throws_ok(
 );
 select throws_ok(
   $$insert into public.tasks (organization_id, project_id, title, assignee_id, reporter_id) values ('10000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', 'Cross tenant assignee', 'user_beta', 'user_alpha')$$,
-  '23503',
-  null,
-  'composite foreign key rejects an assignee from another tenant'
+  '23514',
+  'Task assignee must be an active organization member',
+  'active-member enforcement rejects an assignee from another tenant'
 );
 select throws_ok(
   $$insert into public.comments (organization_id, task_id, author_id, body) values ('10000000-0000-4000-8000-000000000001', '22200000-0000-4000-8000-000000000002', 'user_alpha', 'Cross tenant comment')$$,
-  '23503',
+  '42501',
   null,
-  'composite foreign key rejects a comment on another tenant task'
+  'direct Data API comment insertion cannot bypass the controlled RPC'
 );
 select throws_ok(
   $$insert into public.attachments (id, organization_id, project_id, task_id, uploaded_by, storage_path, original_name, mime_type, size_bytes) values ('33300000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', '22200000-0000-4000-8000-000000000002', 'user_alpha', '10000000-0000-4000-8000-000000000001/11000000-0000-4000-8000-000000000001/22200000-0000-4000-8000-000000000002/33300000-0000-4000-8000-000000000003/cross.pdf', 'cross.pdf', 'application/pdf', 10)$$,
@@ -178,7 +178,11 @@ select throws_ok(
 );
 
 select set_config('request.jwt.claims', '{"sub":"user_member","role":"authenticated"}', true);
-select results_eq('select count(*)::bigint from public.organizations', array[0::bigint], 'a stale token cannot read the former tenant after removal');
+select results_eq(
+  $$select count(*)::bigint from public.organizations where id = '10000000-0000-4000-8000-000000000001'$$,
+  array[0::bigint],
+  'a stale token cannot read the former tenant after removal'
+);
 select results_eq(
   $$update public.tasks set status = 'DONE' where organization_id = '10000000-0000-4000-8000-000000000001' returning id$$,
   array[]::uuid[],
@@ -206,11 +210,10 @@ select throws_ok(
 
 set local role anon;
 select set_config('request.jwt.claims', '{}', true);
-select throws_ok(
+select results_eq(
   'select count(*)::bigint from public.organizations',
-  '42501',
-  null,
-  'anonymous users cannot query organizations'
+  array[0::bigint],
+  'anonymous users cannot read organization rows'
 );
 
 select * from finish();

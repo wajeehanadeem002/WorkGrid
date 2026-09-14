@@ -37,6 +37,10 @@ where organization_id = '30000000-0000-4000-8000-000000000003'
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"user_gamma","role":"authenticated"}', true);
+-- The Storage API sets this transaction-local guard before deleting metadata.
+-- Enabling it here lets pgTAP exercise WorkGrid's DELETE RLS policy instead of
+-- being stopped first by Supabase's direct-SQL orphan-prevention trigger.
+select set_config('storage.allow_delete_query', 'true', true);
 
 select results_eq($$select count(*)::bigint from storage.objects where bucket_id = 'attachments'$$, array[2::bigint], 'storage listing is tenant isolated');
 select results_eq($$select count(*)::bigint from public.attachments$$, array[2::bigint], 'attachment metadata is tenant isolated');

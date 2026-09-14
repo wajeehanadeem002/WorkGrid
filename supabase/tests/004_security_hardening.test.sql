@@ -176,6 +176,9 @@ select set_config(
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"user_secure_uploader","role":"authenticated"}', true);
+-- Supabase Storage sets this guard for API-managed deletions. The test keeps
+-- the platform's direct-SQL protection intact while exercising WorkGrid RLS.
+select set_config('storage.allow_delete_query', 'true', true);
 
 select throws_ok(
   $$insert into public.attachments (id, organization_id, project_id, task_id, uploaded_by, storage_path, original_name, mime_type, size_bytes, content_sha256) values ('55550000-0000-4000-8000-000000000099', '50000000-0000-4000-8000-000000000005', '55000000-0000-4000-8000-000000000005', '55500000-0000-4000-8000-000000000005', 'user_secure_uploader', '50000000-0000-4000-8000-000000000005/55000000-0000-4000-8000-000000000005/55500000-0000-4000-8000-000000000005/55550000-0000-4000-8000-000000000099/bypass.pdf', 'bypass.pdf', 'application/pdf', 10, repeat('f', 64))$$,
