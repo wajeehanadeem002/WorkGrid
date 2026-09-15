@@ -37,6 +37,10 @@ where organization_id = '30000000-0000-4000-8000-000000000003'
 
 set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"user_gamma","role":"authenticated"}', true);
+-- The Storage API sets this transaction-local guard before deleting metadata.
+-- Enabling it here lets pgTAP exercise WorkGrid's DELETE RLS policy instead of
+-- being stopped first by Supabase's direct-SQL orphan-prevention trigger.
+select set_config('storage.allow_delete_query', 'true', true);
 
 select results_eq($$select count(*)::bigint from storage.objects where bucket_id = 'attachments'$$, array[2::bigint], 'storage listing is tenant isolated');
 select results_eq($$select count(*)::bigint from public.attachments$$, array[2::bigint], 'attachment metadata is tenant isolated');
@@ -47,22 +51,26 @@ select throws_ok(
   null,
   'member cannot upload to an unreserved cross-tenant path'
 );
+select set_config('storage.operation', 'storage.object.delete_many', true);
 select results_eq(
   $$delete from storage.objects where name = '40000000-0000-4000-8000-000000000004/44000000-0000-4000-8000-000000000004/project/44400000-0000-4000-8000-000000000004/delta.pdf' returning name$$,
   array[]::text[],
   'member cannot delete another tenant storage object'
 );
+select set_config('storage.operation', '', true);
 
 select set_config('request.jwt.claims', '{"sub":"user_delta","role":"authenticated"}', true);
 select results_eq($$select count(*)::bigint from storage.objects where name like '30000000-%'$$, array[0::bigint], 'other tenant cannot read gamma object');
 
 select set_config('request.jwt.claims', '{"sub":"user_gamma_uploader","role":"authenticated"}', true);
 select results_eq($$select count(*)::bigint from storage.objects where bucket_id = 'attachments'$$, array[0::bigint], 'removed uploader cannot read storage with a stale token');
+select set_config('storage.operation', 'storage.object.delete_many', true);
 select results_eq(
   $$delete from storage.objects where name like '%former-member.pdf' returning name$$,
   array[]::text[],
   'removed uploader cannot delete storage with a stale token'
 );
+select set_config('storage.operation', '', true);
 
 select * from finish();
 rollback;
