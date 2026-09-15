@@ -68,4 +68,37 @@ describe("ConfirmAction", () => {
     );
     expect(screen.getByRole("dialog")).toHaveAttribute("open");
   });
+
+  it("does not let the dialog close while a destructive action is pending", async () => {
+    let resolveAction: ((state: { status: "success" }) => void) | undefined;
+    const action = vi.fn(
+      () =>
+        new Promise<{ status: "success" }>((resolve) => {
+          resolveAction = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(
+      <ConfirmAction
+        title="Delete attachment?"
+        description="The private file will be removed."
+        action={action}
+        triggerLabel="Delete attachment"
+        confirmLabel="Delete"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete attachment" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled(),
+    );
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "true");
+
+    resolveAction?.({ status: "success" });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled(),
+    );
+  });
 });

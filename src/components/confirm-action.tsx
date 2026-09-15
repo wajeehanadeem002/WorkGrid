@@ -19,7 +19,10 @@ export function ConfirmAction({
   confirmLabel: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [state, formAction] = useActionState(action, initialActionState);
+  const [state, formAction, pending] = useActionState(
+    action,
+    initialActionState,
+  );
   const titleId = useId();
   const descriptionId = useId();
   return (
@@ -27,6 +30,7 @@ export function ConfirmAction({
       <button
         type="button"
         className="button button--danger button--small"
+        disabled={pending}
         onClick={() => dialogRef.current?.showModal()}
       >
         {triggerLabel}
@@ -36,6 +40,10 @@ export function ConfirmAction({
         className="confirm-dialog"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
+        aria-busy={pending}
+        onCancel={(event) => {
+          if (pending) event.preventDefault();
+        }}
       >
         <div className="confirm-dialog__content">
           <h2 id={titleId}>{title}</h2>
@@ -45,6 +53,7 @@ export function ConfirmAction({
             <button
               className="button button--secondary"
               type="button"
+              disabled={pending}
               onClick={() => dialogRef.current?.close()}
             >
               Cancel
