@@ -185,15 +185,15 @@ begin
   -- Keep maintenance bounded so a cleanup invocation cannot monopolize a
   -- large table after an extended outage.
   with expired_windows as (
-    select window.ctid
-    from public.rate_limit_windows window
-    where window.expires_at < now()
-    order by window.expires_at
+    select rate_window.ctid
+    from public.rate_limit_windows rate_window
+    where rate_window.expires_at < now()
+    order by rate_window.expires_at
     limit 1000
   )
-  delete from public.rate_limit_windows window
+  delete from public.rate_limit_windows rate_window
   using expired_windows expired
-  where window.ctid = expired.ctid;
+  where rate_window.ctid = expired.ctid;
 
   return query
   with candidates as (
