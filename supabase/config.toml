@@ -41,3 +41,6 @@ domain = ""
 
 [analytics]
 enabled = false
+
+[functions.cleanup-attachments]
+verify_jwt = false

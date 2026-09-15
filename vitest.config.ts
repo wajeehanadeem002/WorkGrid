@@ -16,7 +16,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "supabase/functions/**/*.test.ts"],
     pool: "threads",
     maxWorkers: 1,
     isolate: false,
@@ -36,6 +36,7 @@ export default defineConfig({
         "src/lib/security/uploads.ts",
         "src/lib/data/rpc.ts",
         "src/features/shared/schemas.ts",
+        "supabase/functions/cleanup-attachments/handler.ts",
       ],
       thresholds: {
         lines: 85,
