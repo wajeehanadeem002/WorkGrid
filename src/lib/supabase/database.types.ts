@@ -200,6 +200,7 @@ export interface Database {
           storage_object_id: string | null;
           upload_status: Database["public"]["Enums"]["attachment_status"];
           deletion_started_at: string | null;
+          cleanup_claimed_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -216,12 +217,14 @@ export interface Database {
           storage_object_id?: string | null;
           upload_status?: Database["public"]["Enums"]["attachment_status"];
           deletion_started_at?: string | null;
+          cleanup_claimed_at?: string | null;
           created_at?: string;
         };
         Update: {
           upload_status?: Database["public"]["Enums"]["attachment_status"];
           storage_object_id?: string | null;
           deletion_started_at?: string | null;
+          cleanup_claimed_at?: string | null;
         };
         Relationships: Relationship[];
       };
@@ -363,6 +366,18 @@ export interface Database {
       };
       reconcile_attachment_deletion: {
         Args: { attachment_id: string };
+        Returns: Json;
+      };
+      claim_attachment_cleanup_batch: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          attachment_id: string;
+          storage_path: string;
+          cleanup_mode: string;
+        }[];
+      };
+      finalize_attachment_cleanup: {
+        Args: { target_attachment_id: string };
         Returns: Json;
       };
       current_user_id: {

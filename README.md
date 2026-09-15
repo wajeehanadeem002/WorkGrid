@@ -89,7 +89,7 @@ Open `http://localhost:3000`.
 | `WORKGRID_SERVER_PROOF_SECRET`                    | Server-only   | HMAC key for controlled attachment/invitation RPCs    |
 | `CLERK_JWT_ISSUER`                                | Local tooling | Clerk issuer used when enabling the local integration |
 
-No service-role key is required for normal application traffic.
+No service-role key is required for normal application traffic. Scheduled cleanup has separate Supabase-managed secrets documented below; they do not belong in `.env.local` or `.env.example`.
 
 ## Clerk setup
 
@@ -141,7 +141,7 @@ To test Clerk tokens against the local stack, enable `[auth.third_party.clerk]` 
 
 The migration creates a private `attachments` bucket with a 4 MiB limit and a narrow MIME allowlist. The application authenticates and consumes an upload attempt before content inspection, then validates the extension/MIME pair, binary file signature or complete UTF-8 text/CSV payload, and complete digest. Text validation rejects malformed UTF-8 and non-text control bytes anywhere in the file. Server HMAC proofs gate reservation, sealing, and finalization RPCs; direct clients cannot insert metadata or promote an attachment. After upload, the exact Storage object ID, size, and MIME are sealed into an immutable `verifying` state. The server then downloads the private object, validates its content again, hashes its complete stored bytes, and only then issues the final proof for `ready`. Rejected bytes enter a non-readable `discarding` cleanup state. The slightly larger Server Action request ceiling allows multipart overhead while remaining below Vercel's 4.5 MB Function payload limit. Downloads are streamed through an authenticated, tenant-authorized Route Handler, so a reusable Storage URL is never exposed. Do not make this bucket public.
 
-Configure a trusted scheduled cleanup process using [docs/storage-cleanup.md](docs/storage-cleanup.md). The cleanup requires privileged credentials and should run outside browser code.
+The `cleanup-attachments` Supabase Edge Function removes interrupted or rejected uploads and retries timed-out deletions every 15 minutes. Its fixed-size service-role RPCs are not callable by browsers, its cron token is read from Vault, and object removal uses only the official Storage API. Provision `WORKGRID_CLEANUP_TOKEN` as an Edge Function secret and the matching `workgrid_cleanup_token` plus `workgrid_project_url` as Vault secrets. See [docs/storage-cleanup.md](docs/storage-cleanup.md) for the exact lifecycle, deployment gate, and monitoring procedure.
 
 ## Testing and quality checks
 
@@ -161,7 +161,7 @@ npm run db:lint
 npm run db:test
 ```
 
-The pgTAP suites explicitly verify tenant isolation, manipulated resource IDs, cross-tenant update/delete denial, role escalation denial, stale-session denial after membership removal, transactional unassignment, proofed pending-to-verifying-to-ready transitions, exact Storage object binding, direct Data API mutation denial, invitation email binding, bounded rate limits, cleanup/deletion states, audit immutability, anonymous denial, and private Storage isolation.
+The pgTAP suites explicitly verify tenant isolation, manipulated resource IDs, cross-tenant update/delete denial, role escalation denial, stale-session denial after membership removal, transactional unassignment, proofed pending-to-verifying-to-ready transitions, exact Storage object binding, direct Data API mutation denial, invitation email binding, bounded rate limits, cleanup/deletion states and worker leases, service-role-only cleanup RPCs, audit immutability, anonymous denial, and private Storage isolation.
 
 The Vitest coverage gate measures deterministic authorization, validation, pagination, export-safety, upload-policy, error-mapping, and rate-limit code at high thresholds. Server Actions and provider adapters are exercised through query-contract tests and the database/RLS suite instead of being counted as uncovered framework glue.
 
@@ -212,10 +212,11 @@ This repository began without commits. The initial review-ready working tree is 
 1. Create Clerk and Supabase production projects.
 2. Enable Clerk's native Supabase integration and apply the reviewed migrations.
 3. Configure the private Storage bucket policies from the migration.
-4. Import the repository into Vercel and add all required environment variables.
-5. Configure preview deployments for `dev` and feature pull requests.
-6. Configure the production domain only for `main`.
-7. Require the GitHub Actions checks before merging into `dev` or `main`.
+4. Provision the scheduled cleanup Edge Function/Vault secrets and deploy the function as described in [docs/storage-cleanup.md](docs/storage-cleanup.md).
+5. Import the repository into Vercel and add all required web application environment variables.
+6. Configure preview deployments for `dev` and feature pull requests.
+7. Configure the production domain only for `main`.
+8. Require the GitHub Actions checks before merging into `dev` or `main`.
 
 No deployment command is embedded in CI. Vercel owns preview and production deployment policy after repository integration.
 
