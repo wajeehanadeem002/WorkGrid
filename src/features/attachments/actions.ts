@@ -28,6 +28,24 @@ import {
   createServerProof,
 } from "@/lib/security/server-proof";
 
+const ATTACHMENT_DELETE_TIMEOUT_MS = 12_000;
+
+function isTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as {
+    name?: unknown;
+    cause?: unknown;
+    originalError?: unknown;
+  };
+  if (candidate.name === "TimeoutError") return true;
+  return [candidate.originalError, candidate.cause].some(
+    (nested) =>
+      Boolean(nested) &&
+      typeof nested === "object" &&
+      (nested as { name?: unknown }).name === "TimeoutError",
+  );
+}
+
 async function discardUntrustedAttachment(
   client: WorkGridClient,
   attachmentId: string,
@@ -272,7 +290,9 @@ export async function deleteAttachmentAction(
 ): Promise<ActionState> {
   void _state;
   void _formData;
-  const authenticated = await createAuthenticatedContext();
+  const authenticated = await createAuthenticatedContext({
+    requestTimeoutMs: ATTACHMENT_DELETE_TIMEOUT_MS,
+  });
   return actionResult(async () => {
     const task = uuidSchema.parse(taskId);
     const attachment = uuidSchema.parse(attachmentId);
@@ -302,9 +322,29 @@ export async function deleteAttachmentAction(
       throw new AppError("UNAVAILABLE", "The attachment could not be deleted.");
     }
 
-    const { error: storageError } = await client.storage
-      .from("attachments")
-      .remove([metadata.storage_path]);
+    let storageError: unknown = null;
+    try {
+      const result = await client.storage
+        .from("attachments")
+        .remove([metadata.storage_path]);
+      storageError = result.error;
+    } catch (error) {
+      storageError = error;
+    }
+
+    if (isTimeoutError(storageError)) {
+      // A timed-out DELETE is ambiguous: the provider may still finish after
+      // the client aborts. Keep metadata sealed as `deleting` so the trusted
+      // cleanup flow can reconcile it without restoring a path that may soon
+      // disappear.
+      revalidatePath(`/app/${slug}/tasks/${task}`);
+      return {
+        status: "success",
+        message:
+          "Deletion is still being confirmed. The attachment will remain unavailable while storage is reconciled.",
+      };
+    }
+
     const { data: reconciled, error: reconcileError } = await client.rpc(
       "reconcile_attachment_deletion",
       { attachment_id: attachment },

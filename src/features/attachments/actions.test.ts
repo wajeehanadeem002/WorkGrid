@@ -332,4 +332,96 @@ describe("uploadAttachmentAction boundary", () => {
       message: expect.stringContaining("metadata was restored"),
     });
   });
+
+  it("bounds the authenticated client used by the deletion flow", async () => {
+    await deleteAttachmentAction(
+      "northstar",
+      "22222222-2222-4222-8222-222222222222",
+      "44444444-4444-4444-8444-444444444444",
+      { status: "idle" },
+      new FormData(),
+    );
+
+    expect(createAuthenticatedContext).toHaveBeenCalledWith({
+      requestTimeoutMs: 12_000,
+    });
+  });
+
+  it("reconciles the deleting state when the Storage client throws", async () => {
+    rpc.mockImplementation(async (name: string) => {
+      if (name === "begin_attachment_deletion") {
+        return {
+          data: {
+            ok: true,
+            storage_path:
+              "11111111-1111-4111-8111-111111111111/33333333-3333-4333-8333-333333333333/22222222-2222-4222-8222-222222222222/44444444-4444-4444-8444-444444444444/brief.pdf",
+          },
+          error: null,
+        };
+      }
+      if (name === "reconcile_attachment_deletion") {
+        return { data: { ok: true, outcome: "RESTORED" }, error: null };
+      }
+      return { data: { ok: true }, error: null };
+    });
+    remove.mockRejectedValueOnce(new Error("network failure"));
+
+    await expect(
+      deleteAttachmentAction(
+        "northstar",
+        "22222222-2222-4222-8222-222222222222",
+        "44444444-4444-4444-8444-444444444444",
+        { status: "idle" },
+        new FormData(),
+      ),
+    ).resolves.toMatchObject({
+      status: "error",
+      code: "UNAVAILABLE",
+      message: expect.stringContaining("metadata was restored"),
+    });
+    expect(rpc).toHaveBeenCalledWith("reconcile_attachment_deletion", {
+      attachment_id: "44444444-4444-4444-8444-444444444444",
+    });
+  });
+
+  it("keeps an ambiguous timed-out deletion sealed instead of restoring ready metadata", async () => {
+    rpc.mockImplementation(async (name: string) => {
+      if (name === "begin_attachment_deletion") {
+        return {
+          data: {
+            ok: true,
+            storage_path:
+              "11111111-1111-4111-8111-111111111111/33333333-3333-4333-8333-333333333333/22222222-2222-4222-8222-222222222222/44444444-4444-4444-8444-444444444444/brief.pdf",
+          },
+          error: null,
+        };
+      }
+      return { data: { ok: true }, error: null };
+    });
+    remove.mockResolvedValueOnce({
+      data: null,
+      error: {
+        name: "StorageUnknownError",
+        message: "The operation timed out.",
+        originalError: { name: "TimeoutError" },
+      },
+    });
+
+    await expect(
+      deleteAttachmentAction(
+        "northstar",
+        "22222222-2222-4222-8222-222222222222",
+        "44444444-4444-4444-8444-444444444444",
+        { status: "idle" },
+        new FormData(),
+      ),
+    ).resolves.toMatchObject({
+      status: "success",
+      message: expect.stringContaining("still being confirmed"),
+    });
+    expect(rpc).not.toHaveBeenCalledWith(
+      "reconcile_attachment_deletion",
+      expect.any(Object),
+    );
+  });
 });
